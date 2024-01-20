@@ -1,4 +1,5 @@
 'use client';
+import { ClientToServerEvents, ServerToClientEvents } from '@/types/socket';
 import { FC, createContext, useContext, useMemo } from 'react';
 import { io, Socket } from 'socket.io-client';
 
@@ -7,7 +8,7 @@ type SocketProps = {
 };
 
 export type SocketContextValue = {
-  socket: Socket;
+  socket: Socket<ServerToClientEvents, ClientToServerEvents>;
 };
 
 const SocketContext = createContext<SocketContextValue | null>(null);

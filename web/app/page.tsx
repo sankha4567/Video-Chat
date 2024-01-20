@@ -33,7 +33,7 @@ export default function Home() {
   const onSubmit = useCallback(
     (values: z.infer<typeof formSchema>) => {
       const { username, roomId } = values;
-      socket.emit('room:join', { username, roomId });
+      socket.emit('room:join', { username, roomId: roomId.toString() });
       router.push(`/room/${roomId}`);
     },
     [socket]
