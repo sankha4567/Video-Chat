@@ -6,26 +6,16 @@ type SocketProps = {
   children: React.ReactNode;
 };
 
-type SocketContextValue = {
+export type SocketContextValue = {
   socket: Socket;
 };
 
-const SocketContext = createContext<SocketContextValue | undefined>(undefined);
+const SocketContext = createContext<SocketContextValue | null>(null);
 
-export const useSocket = () => {
-  const socket = useContext(SocketContext);
-  return { socket };
-};
+export const useSocket = () => useContext(SocketContext);
 
 const SocketProvider: FC<SocketProps> = ({ children }) => {
-  const socket = useMemo(
-    () =>
-      io({
-        host: 'localhost',
-        port: 3000,
-      }),
-    []
-  );
+  const socket = useMemo(() => io('http://localhost:8080'), []);
 
   return (
     <SocketContext.Provider value={{ socket }}>
