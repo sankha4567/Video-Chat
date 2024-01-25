@@ -1,11 +1,10 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { ClientToServerEvents, ServerToClientEvents } from './types';
 
 const app = express();
 const server = createServer(app);
-const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
+const io = new Server(server, {
   cors: {
     origin: 'http://localhost:3002',
   },
@@ -15,19 +14,49 @@ const port = process.env.PORT || 8080;
 
 app.use(express.json());
 
-const usernameToSocketIdMap: Map<string, string> = new Map();
-const socketIdToUsernameMap: Map<string, string> = new Map();
+io.on('connection', (socket) => {
+  console.log('Socket connected -' + socket.id);
 
-io.on('connect', (socket) => {
-  console.log('Socket connected: ' + socket.id);
+  socket.on('room-join', (roomID) => {
+    const room = io.sockets.adapter.rooms.get(roomID);
 
-  socket.on('room:join', ({ username, roomId }) => {
-    usernameToSocketIdMap.set(username, socket.id);
-    socketIdToUsernameMap.set(socket.id, username);
+    if (room === undefined) {
+      socket.join(roomID);
+      socket.emit('room-created');
+    } else if (room.size === 1) {
+      socket.join(roomID);
+      socket.emit('room-joined');
+    } else {
+      socket.emit('room-full');
+    }
+  });
 
-    socket.join(roomId);
+  socket.on('ready', (roomID) => {
+    socket.to(roomID).emit('ready');
+  });
 
-    io.to(roomId).emit('user:joined', { message: `${username} joined the room` });
+  socket.on('offer', (sdp, roomID) => {
+    console.log('offer', sdp);
+    socket.to(roomID).emit('offer', sdp);
+  });
+
+  socket.on('answer', (sdp, roomID) => {
+    console.log('answer', sdp);
+    socket.to(roomID).emit('answer', sdp);
+  });
+
+  socket.on('ice-candidate', (candidate, roomID) => {
+    console.log('ice-candidate', candidate);
+    socket.to(roomID).emit('ice-candidate', candidate);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Socket disconnected -' + socket.id);
+    io.sockets.adapter.rooms.forEach((value, key) => {
+      if (value.has(socket.id)) {
+        io.to(key).emit('user-disconnected', socket.id);
+      }
+    });
   });
 });
 

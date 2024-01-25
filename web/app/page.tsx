@@ -1,83 +1,29 @@
 'use client';
 
-import { SocketContextValue, useSocket } from '@/components/providers/Socket';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { v4 as uuidv4 } from 'uuid';
 import { Button } from '@/components/ui/button';
-import { formSchema } from '@/schema/form';
 import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function Home() {
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      username: '',
-      roomId: 0,
-    },
-  });
-
-  const { socket } = useSocket() as SocketContextValue;
   const router = useRouter();
 
-  const onSubmit = useCallback(
-    (values: z.infer<typeof formSchema>) => {
-      const { username, roomId } = values;
-      socket.emit('room:join', { username, roomId: roomId.toString() });
-      router.push(`/room/${roomId}`);
-    },
-    [socket]
-  );
+  const createRoom = useCallback(() => {
+    const id = uuidv4();
+    router.push(`/room/${id}`);
+  }, [router]);
 
   return (
-    <main className="flex flex-col justify-center items-center gap-8 min-h-screen">
-      <h1 className="text-xl font-bold">Join a Room</h1>
-      <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="space-y-8 max-w-xs w-full"
-        >
-          <FormField
-            control={form.control}
-            name="username"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Username</FormLabel>
-                <FormControl>
-                  <Input placeholder="shadcn" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="roomId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Room ID</FormLabel>
-                <FormControl>
-                  <Input {...field} type="number" min="0" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <Button type="submit" className="w-full">
-            Submit
-          </Button>
-        </form>
-      </Form>
+    <main className="flex justify-center items-center min-h-screen">
+      <section className="flex flex-col gap-8">
+        <div className='space-y-2'>
+        <h1 className="text-3xl font-bold">Start a <span className='text-green-500'>Stream!</span></h1>
+          <p className='text-sm dark:text-gray-400 text-gray-500'>Create a room by clicking the button below</p>
+        </div>
+        <Button variant="outline" onClick={createRoom} className='font-bold'>
+          Create Room
+        </Button>
+      </section>
     </main>
   );
 }
