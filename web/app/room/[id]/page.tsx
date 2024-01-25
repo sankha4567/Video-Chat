@@ -1,8 +1,10 @@
 'use client';
 
-import { FC, useEffect, useRef, useCallback } from 'react';
+import { FC, useEffect, useRef, useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Socket, io } from 'socket.io-client';
+import { Button } from '@/components/ui/button';
+import { Mic, MicOff, Camera, CameraOff } from 'lucide-react';
 
 type pageProps = {
   params: {
@@ -12,20 +14,34 @@ type pageProps = {
 
 const Page: FC<pageProps> = ({ params: { id } }) => {
   const router = useRouter();
+  const [mic, setMic] = useState<boolean>(true);
+  const [cam, setCam] = useState<boolean>(false);
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
-  const localStreamRef = useRef<MediaStream>();
-  const peerConnectionRef = useRef<RTCPeerConnection>();
-  const socketRef = useRef<Socket>();
-  const hostRef = useRef(false);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const hostRef = useRef<boolean>(false);
 
   const getUserMedia = useCallback(async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        height: 200,
+        width: 300
+      },
+      audio: true
+    });
     if (localVideoRef.current) {
       localVideoRef.current.srcObject = stream;
     }
     localStreamRef.current = stream;
+
+    localStreamRef.current.getTracks().forEach((track) => {
+      if (track.kind === 'video') {
+        track.enabled = false;
+      }
+    });
   }, []);
 
   const handleRoomCreated = useCallback(async () => {
@@ -40,11 +56,29 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
     }
   }, [getUserMedia, id]);
 
-  const handleICECandidateEvent = useCallback((event: RTCPeerConnectionIceEvent) => {
-    if (event.candidate && socketRef.current) {
-      socketRef.current.emit('ice-candidate', event.candidate, id);
+  const handleUserDisconnected = useCallback(() => {
+    hostRef.current = true;
+
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = null;
     }
-  }, [id]);
+
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.ontrack = null;
+      peerConnectionRef.current.onicecandidate = null;
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+  }, []);
+
+  const handleICECandidateEvent = useCallback(
+    (event: RTCPeerConnectionIceEvent) => {
+      if (event.candidate && socketRef.current) {
+        socketRef.current.emit('ice-candidate', event.candidate, id);
+      }
+    },
+    [id]
+  );
 
   const handleTrackEvent = useCallback((event: RTCTrackEvent) => {
     if (remoteVideoRef.current) {
@@ -84,25 +118,28 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
     }
   }, [createPeer, id]);
 
-  const handleReceiveOffer = useCallback(async (offer: RTCSessionDescriptionInit) => {
-    if (!hostRef.current) {
-      const pc = createPeer();
-      localStreamRef.current?.getTracks().forEach((track) => {
-        pc.addTrack(track, localStreamRef.current!);
-      });
+  const handleReceiveOffer = useCallback(
+    async (offer: RTCSessionDescriptionInit) => {
+      if (!hostRef.current) {
+        const pc = createPeer();
+        localStreamRef.current?.getTracks().forEach((track) => {
+          pc.addTrack(track, localStreamRef.current!);
+        });
 
-      await pc.setRemoteDescription(offer);
+        await pc.setRemoteDescription(offer);
 
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
 
-      if (socketRef.current) {
-        socketRef.current.emit('answer', answer, id);
+        if (socketRef.current) {
+          socketRef.current.emit('answer', answer, id);
+        }
+
+        peerConnectionRef.current = pc;
       }
-
-      peerConnectionRef.current = pc;
-    }
-  }, [createPeer, id]);
+    },
+    [createPeer, id]
+  );
 
   const handleAnswer = useCallback(async (answer: RTCSessionDescriptionInit) => {
     if (peerConnectionRef.current) {
@@ -114,7 +151,7 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
     if (peerConnectionRef.current) {
       await peerConnectionRef.current.addIceCandidate(candidate);
     }
-  },[]);
+  }, []);
 
   useEffect(() => {
     const socket = io('http://localhost:8080');
@@ -127,6 +164,7 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
     socket.on('room-full', () => {
       router.push('/');
     });
+    socket.on('user-disconnected', handleUserDisconnected);
 
     socket.on('offer', handleReceiveOffer);
     socket.on('answer', handleAnswer);
@@ -137,28 +175,68 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
     return () => {
       socket.disconnect();
     };
-  }, [handleAnswer, handleNewICECandidateMsg, handleReceiveOffer, handleRoomCreated, handleRoomJoined, id, initiatePeerConnection, router]);
+  }, [
+    handleAnswer,
+    handleNewICECandidateMsg,
+    handleReceiveOffer,
+    handleRoomCreated,
+    handleRoomJoined,
+    handleUserDisconnected,
+    id,
+    initiatePeerConnection,
+    router
+  ]);
+
+  const toggleMediaStream = useCallback((type: string, state: boolean) => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((t) => {
+        if (t.kind === type) {
+          t.enabled = !state;
+        }
+      });
+    }
+  }, []);
+
+  const toggleMic = () => {
+    toggleMediaStream('audio', mic);
+    setMic((mic) => !mic);
+  };
+
+  const toggleCam = () => {
+    toggleMediaStream('video', cam);
+    setCam((cam) => !cam);
+  };
 
   return (
     <main className="flex flex-col mt-5 gap-3 m-2">
       <h1 className="text-xl font-bold text-center">
-        Share the <span className="text-blue-500">URL</span> to invite people
+        Share the <span className="text-blue-500">link</span> with your friend to start the call
       </h1>
-      <section className="flex flex-col gap-10">
+      <section className="flex flex-col gap-5 grow">
         <video
           autoPlay
           ref={localVideoRef}
-          height="300"
+          height="225"
           width="300"
           muted
           className="rounded-lg border"></video>
         <video
           autoPlay
           ref={remoteVideoRef}
-          height="300"
+          height="225"
           width="300"
           className="rounded-lg border"></video>
       </section>
+      <div className="flex gap-2 mx-auto">
+        <Button variant="outline" onClick={toggleMic}>
+          {' '}
+          {mic ? <Mic /> : <MicOff />}{' '}
+        </Button>
+        <Button variant="outline" onClick={toggleCam}>
+          {' '}
+          {cam ? <Camera /> : <CameraOff />}{' '}
+        </Button>
+      </div>
     </main>
   );
 };

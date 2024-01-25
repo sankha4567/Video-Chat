@@ -6,13 +6,15 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:3002',
+    origin: '*',
   },
 });
 
 const port = process.env.PORT || 8080;
 
 app.use(express.json());
+
+const userToRoomMap = new Map<string, Set<string>>();
 
 io.on('connection', (socket) => {
   console.log('Socket connected -' + socket.id);
@@ -29,6 +31,13 @@ io.on('connection', (socket) => {
     } else {
       socket.emit('room-full');
     }
+
+    if (!userToRoomMap.has(socket.id)) {
+      userToRoomMap.set(socket.id, new Set([roomID]));
+    } else {
+      userToRoomMap.get(socket.id)?.add(roomID);
+    }
+    
   });
 
   socket.on('ready', (roomID) => {
@@ -52,11 +61,14 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('Socket disconnected -' + socket.id);
-    io.sockets.adapter.rooms.forEach((value, key) => {
-      if (value.has(socket.id)) {
-        io.to(key).emit('user-disconnected', socket.id);
-      }
-    });
+    const rooms = userToRoomMap.get(socket.id);
+    if (rooms) {
+      rooms.forEach((roomID) => {
+        socket.to(roomID).emit('user-disconnected', socket.id);
+      });
+    }
+
+    userToRoomMap.delete(socket.id);
   });
 });
 
