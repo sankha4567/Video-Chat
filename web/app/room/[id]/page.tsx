@@ -1,10 +1,10 @@
 'use client';
 
-import { FC, useEffect, useRef, useCallback, useState } from 'react';
+import { FC, useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Socket, io } from 'socket.io-client';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Camera, CameraOff } from 'lucide-react';
+import { Mic, MicOff, Camera, CameraOff, ScreenShare } from 'lucide-react';
 
 type pageProps = {
   params: {
@@ -12,229 +12,238 @@ type pageProps = {
   };
 };
 
+type Message = {
+  description: RTCSessionDescription;
+  candidate: RTCIceCandidate;
+};
+
 const Page: FC<pageProps> = ({ params: { id } }) => {
   const router = useRouter();
-  const [mic, setMic] = useState<boolean>(true);
-  const [cam, setCam] = useState<boolean>(false);
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
+  const screenVideoRef = useRef<HTMLVideoElement | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
   const socketRef = useRef<Socket | null>(null);
-  const hostRef = useRef<boolean>(false);
 
-  const getUserMedia = useCallback(async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        height: 200,
-        width: 300
-      },
-      audio: true
-    });
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = stream;
-    }
-    localStreamRef.current = stream;
+  const makingOfferRef = useRef<boolean>(false);
+  const ignoreOfferRef = useRef<boolean>(false);
+  const politeRef = useRef<boolean>(false);
 
-    localStreamRef.current.getTracks().forEach((track) => {
-      if (track.kind === 'video') {
-        track.enabled = false;
-      }
-    });
+  const [mic, setMic] = useState<boolean>(true);
+  const [camera, setCamera] = useState<boolean>(false);
+
+  const config: RTCConfiguration = useMemo(() => {
+    return {
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    };
   }, []);
 
-  const handleRoomCreated = useCallback(async () => {
-    hostRef.current = true;
-    await getUserMedia();
-  }, [getUserMedia]);
-
-  const handleRoomJoined = useCallback(async () => {
-    await getUserMedia();
-    if (socketRef.current) {
-      socketRef.current.emit('ready', id);
+  const handleNegotiationNeeded = useCallback(async () => {
+    try {
+      makingOfferRef.current = true;
+      await pcRef.current?.setLocalDescription();
+      socketRef.current?.emit('message', { description: pcRef.current?.localDescription }, id);
+    } catch (e) {
+      // toast notification ?
+    } finally {
+      makingOfferRef.current = false;
     }
-  }, [getUserMedia, id]);
+  }, [id]);
 
-  const handleUserDisconnected = useCallback(() => {
-    hostRef.current = true;
-
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null;
-    }
-
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.ontrack = null;
-      peerConnectionRef.current.onicecandidate = null;
-      peerConnectionRef.current.close();
-      peerConnectionRef.current = null;
-    }
+  const handleTrack = useCallback(({ track, streams }: RTCTrackEvent) => {
+    track.onunmute = () => {
+      console.log(streams[0]);
+      if (remoteVideoRef.current?.srcObject) return;
+      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = streams[0];
+    };
   }, []);
 
-  const handleICECandidateEvent = useCallback(
-    (event: RTCPeerConnectionIceEvent) => {
-      if (event.candidate && socketRef.current) {
-        socketRef.current.emit('ice-candidate', event.candidate, id);
+  const handleICECandidate = useCallback(
+    (e: RTCPeerConnectionIceEvent) => {
+      if (e.candidate) {
+        socketRef.current?.emit('message', { candidate: e.candidate }, id);
       }
     },
     [id]
   );
 
-  const handleTrackEvent = useCallback((event: RTCTrackEvent) => {
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = event.streams[0];
-    }
-  }, []);
-
   const createPeer = useCallback(() => {
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        {
-          urls: 'stun:stun.l.google.com:19302'
-        }
-      ]
+    const pc = new RTCPeerConnection(config);
+
+    pc.onnegotiationneeded = handleNegotiationNeeded;
+    pc.ontrack = handleTrack;
+    pc.onicecandidate = handleICECandidate;
+
+    return pc;
+  }, [config, handleNegotiationNeeded, handleTrack, handleICECandidate]);
+
+  const getUserMedia = useCallback(async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    stream.getTracks().forEach((track) => {
+      if (track.kind === 'video') {
+        track.enabled = false;
+      }
     });
 
-    pc.onicecandidate = handleICECandidateEvent;
-    pc.ontrack = handleTrackEvent;
-    return pc;
-  }, [handleICECandidateEvent, handleTrackEvent]);
+    if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+    localStreamRef.current = stream;
+  }, []);
 
-  const initiatePeerConnection = useCallback(async () => {
-    if (hostRef.current) {
-      const pc = createPeer();
-      localStreamRef.current?.getTracks().forEach((track) => {
-        pc.addTrack(track, localStreamRef.current!);
-      });
+  const handlePeerMessage = useCallback(
+    async ({ description, candidate }: Message) => {
+      try {
+        if (description) {
+          const offerCollision =
+            description.type == 'offer' &&
+            (makingOfferRef.current || pcRef.current?.signalingState !== 'stable');
 
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
+          ignoreOfferRef.current = !politeRef.current && offerCollision;
+          if (ignoreOfferRef.current) {
+            return;
+          }
 
-      if (socketRef.current) {
-        socketRef.current.emit('offer', offer, id);
-      }
+          pcRef.current?.setRemoteDescription(description);
 
-      peerConnectionRef.current = pc;
-    }
-  }, [createPeer, id]);
-
-  const handleReceiveOffer = useCallback(
-    async (offer: RTCSessionDescriptionInit) => {
-      if (!hostRef.current) {
-        const pc = createPeer();
-        localStreamRef.current?.getTracks().forEach((track) => {
-          pc.addTrack(track, localStreamRef.current!);
-        });
-
-        await pc.setRemoteDescription(offer);
-
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-
-        if (socketRef.current) {
-          socketRef.current.emit('answer', answer, id);
+          if (description.type === 'offer') {
+            await pcRef.current?.setLocalDescription();
+            socketRef.current?.emit(
+              'message',
+              { description: pcRef.current?.localDescription },
+              id
+            );
+          }
+        } else if (candidate) {
+          try {
+            await pcRef.current?.addIceCandidate(candidate);
+          } catch (err) {
+            if (!ignoreOfferRef) {
+              throw err;
+            }
+          }
         }
-
-        peerConnectionRef.current = pc;
+      } catch (err) {
+        console.log(err);
       }
     },
-    [createPeer, id]
+    [id]
   );
-
-  const handleAnswer = useCallback(async (answer: RTCSessionDescriptionInit) => {
-    if (peerConnectionRef.current) {
-      await peerConnectionRef.current.setRemoteDescription(answer);
-    }
-  }, []);
-
-  const handleNewICECandidateMsg = useCallback(async (candidate: RTCIceCandidate) => {
-    if (peerConnectionRef.current) {
-      await peerConnectionRef.current.addIceCandidate(candidate);
-    }
-  }, []);
 
   useEffect(() => {
     const socket = io('http://localhost:8080');
-
     socket.emit('room-join', id);
 
-    socket.on('room-created', handleRoomCreated);
-    socket.on('room-joined', handleRoomJoined);
-    socket.on('ready', initiatePeerConnection);
+    socket.on('room-created', async () => {
+      await getUserMedia();
+    });
+    socket.on('room-joined', async () => {
+      politeRef.current = true;
+
+      const pc = createPeer();
+      await getUserMedia();
+      localStreamRef.current
+        ?.getTracks()
+        .forEach((track) => pc.addTrack(track, localStreamRef.current!));
+
+      socket.emit('ready', id);
+      pcRef.current = pc;
+    });
     socket.on('room-full', () => {
       router.push('/');
     });
-    socket.on('user-disconnected', handleUserDisconnected);
 
-    socket.on('offer', handleReceiveOffer);
-    socket.on('answer', handleAnswer);
-    socket.on('ice-candidate', handleNewICECandidateMsg);
+    socket.on('ready', () => {
+      const pc = createPeer();
+      localStreamRef.current
+        ?.getTracks()
+        .forEach((track) => pc.addTrack(track, localStreamRef.current!));
+
+      pcRef.current = pc;
+    });
+
+    socket.on('message', handlePeerMessage);
+
+    socket.on('user-disconnected', () => {
+      politeRef.current = false;
+
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = null;
+      }
+
+      if (pcRef.current) {
+        pcRef.current.close();
+        pcRef.current = null;
+      }
+    });
 
     socketRef.current = socket;
-
     return () => {
       socket.disconnect();
+      pcRef.current?.close();
+      socketRef.current = null;
+      pcRef.current = null;
     };
-  }, [
-    handleAnswer,
-    handleNewICECandidateMsg,
-    handleReceiveOffer,
-    handleRoomCreated,
-    handleRoomJoined,
-    handleUserDisconnected,
-    id,
-    initiatePeerConnection,
-    router
-  ]);
+  }, [id, router, createPeer, getUserMedia, handlePeerMessage]);
 
   const toggleMediaStream = useCallback((type: string, state: boolean) => {
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((t) => {
-        if (t.kind === type) {
-          t.enabled = !state;
-        }
-      });
-    }
+    localStreamRef.current?.getTracks().forEach((track) => {
+      if (track.kind === type) {
+        track.enabled = !state;
+      }
+    });
   }, []);
 
-  const toggleMic = () => {
-    toggleMediaStream('audio', mic);
+  const toggleMic = useCallback(() => {
+    toggleMediaStream('mic', mic);
     setMic((mic) => !mic);
-  };
+  }, [toggleMediaStream, mic]);
 
-  const toggleCam = () => {
-    toggleMediaStream('video', cam);
-    setCam((cam) => !cam);
-  };
+  const toggleCam = useCallback(() => {
+    toggleMediaStream('video', camera);
+    setCamera((camera) => !camera);
+  }, [toggleMediaStream, camera]);
+
+  const handleScreenShare = useCallback(async () => {
+    const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true });
+    stream.getTracks().forEach(track => pcRef.current?.addTrack(track, stream))
+
+    if (screenVideoRef.current) screenVideoRef.current.srcObject = stream;
+    
+  }, []);
 
   return (
     <main className="flex flex-col mt-5 gap-3 m-2">
       <h1 className="text-xl font-bold text-center">
         Share the <span className="text-blue-500">link</span> with your friend to start the call
       </h1>
-      <section className="flex flex-col gap-5 grow">
-        <video
-          autoPlay
-          ref={localVideoRef}
-          height="225"
-          width="300"
-          muted
-          className="rounded-lg border"></video>
-        <video
-          autoPlay
-          ref={remoteVideoRef}
-          height="225"
-          width="300"
-          className="rounded-lg border"></video>
+      <section className="flex gap-5 grow">
+        <div className="flex flex-col gap-5">
+          <video
+            autoPlay
+            ref={localVideoRef}
+            height="225"
+            width="300"
+            muted
+            className="rounded-lg border"></video>
+          <video
+            autoPlay
+            ref={remoteVideoRef}
+            height="225"
+            width="300"
+            className="rounded-lg border"></video>
+        </div>
+        <video ref={screenVideoRef}></video>
       </section>
       <div className="flex gap-2 mx-auto">
         <Button variant="outline" onClick={toggleMic}>
-          {' '}
-          {mic ? <Mic /> : <MicOff />}{' '}
+          {mic ? <Mic /> : <MicOff />}
         </Button>
         <Button variant="outline" onClick={toggleCam}>
-          {' '}
-          {cam ? <Camera /> : <CameraOff />}{' '}
+          {camera ? <Camera /> : <CameraOff />}
+        </Button>
+        <Button variant="outline" onClick={handleScreenShare}>
+          <ScreenShare />
         </Button>
       </div>
     </main>
