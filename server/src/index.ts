@@ -44,19 +44,9 @@ io.on('connection', (socket) => {
     socket.to(roomID).emit('ready');
   });
 
-  socket.on('offer', (sdp, roomID) => {
-    console.log('offer', sdp);
-    socket.to(roomID).emit('offer', sdp);
-  });
-
-  socket.on('answer', (sdp, roomID) => {
-    console.log('answer', sdp);
-    socket.to(roomID).emit('answer', sdp);
-  });
-
-  socket.on('ice-candidate', (candidate, roomID) => {
-    console.log('ice-candidate', candidate);
-    socket.to(roomID).emit('ice-candidate', candidate);
+  socket.on('message', (message, roomID) => {
+    console.log('message', message);
+    socket.to(roomID).emit('message', message);
   });
 
   socket.on('disconnect', () => {
