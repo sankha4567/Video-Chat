@@ -95,11 +95,11 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
 
     id2ContentRef.current.set(stream.id, 'webcam');
 
-    // stream.getTracks().forEach((track) => {
-    //   if (track.kind === 'video') {
-    //     track.enabled = false;
-    //   }
-    // });
+    stream.getTracks().forEach((track) => {
+      if (track.kind === 'video') {
+        track.enabled = false;
+      }
+    });
 
     if (localVideoRef.current) localVideoRef.current.srcObject = stream;
     localStreamRef.current = stream;
@@ -230,12 +230,15 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
   }, [toggleMediaStream, camera]);
 
   const handleScreenShare = useCallback(async () => {
-    const stream = await navigator.mediaDevices.getDisplayMedia();
+    const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true });
     id2ContentRef.current.set(stream.id, 'screen');
     socketRef.current?.emit('id2Content', Array.from(id2ContentRef.current), id);
 
     stream.getTracks().forEach((track) => pcRef.current?.addTrack(track, stream));
-    if (screenVideoRef.current) screenVideoRef.current.srcObject = stream;
+    if (screenVideoRef.current) {
+      screenVideoRef.current.srcObject = stream;
+      screenVideoRef.current.muted = true;
+    }
   }, [id]);
 
   return (
