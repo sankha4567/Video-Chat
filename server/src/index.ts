@@ -45,8 +45,12 @@ io.on('connection', (socket) => {
   });
 
   socket.on('message', (message, roomID) => {
-    console.log('message', message);
     socket.to(roomID).emit('message', message);
+  });
+
+  socket.on('id2Content', (id2Content, roomID) => {
+    console.log('id2Content', id2Content);
+    socket.to(roomID).emit('id2Content', id2Content);
   });
 
   socket.on('disconnect', () => {

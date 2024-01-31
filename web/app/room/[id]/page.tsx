@@ -24,6 +24,8 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const screenVideoRef = useRef<HTMLVideoElement | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const id2ContentRef = useRef(new Map<string, string>());
+
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
@@ -44,6 +46,13 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
     try {
       makingOfferRef.current = true;
       await pcRef.current?.setLocalDescription();
+
+      const msids = pcRef.current?.localDescription?.sdp
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.startsWith('a=msid:'));
+      console.log(msids);
+
       socketRef.current?.emit('message', { description: pcRef.current?.localDescription }, id);
     } catch (e) {
       // toast notification ?
@@ -52,12 +61,14 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
     }
   }, [id]);
 
-  const handleTrack = useCallback(({ track, streams }: RTCTrackEvent) => {
-    track.onunmute = () => {
-      console.log(streams[0]);
-      if (remoteVideoRef.current?.srcObject) return;
-      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = streams[0];
-    };
+  const handleTrack = useCallback(({ track, streams: [stream] }: RTCTrackEvent) => {
+    const content = id2ContentRef.current.get(stream.id);
+
+    if (content === 'screen') {
+      if (screenVideoRef.current) screenVideoRef.current.srcObject = stream;
+    } else if (content === 'webcam') {
+      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = stream;
+    }
   }, []);
 
   const handleICECandidate = useCallback(
@@ -81,11 +92,14 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
 
   const getUserMedia = useCallback(async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    stream.getTracks().forEach((track) => {
-      if (track.kind === 'video') {
-        track.enabled = false;
-      }
-    });
+
+    id2ContentRef.current.set(stream.id, 'webcam');
+
+    // stream.getTracks().forEach((track) => {
+    //   if (track.kind === 'video') {
+    //     track.enabled = false;
+    //   }
+    // });
 
     if (localVideoRef.current) localVideoRef.current.srcObject = stream;
     localStreamRef.current = stream;
@@ -130,6 +144,12 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
     [id]
   );
 
+  const addTracksToPC = useCallback((pc: RTCPeerConnection) => {
+    localStreamRef.current
+      ?.getTracks()
+      .forEach((track) => pc.addTrack(track, localStreamRef.current!));
+  }, []);
+
   useEffect(() => {
     const socket = io('http://localhost:8080');
     socket.emit('room-join', id);
@@ -142,11 +162,10 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
 
       const pc = createPeer();
       await getUserMedia();
-      localStreamRef.current
-        ?.getTracks()
-        .forEach((track) => pc.addTrack(track, localStreamRef.current!));
+      addTracksToPC(pc);
 
       socket.emit('ready', id);
+      socket.emit('id2Content', Array.from(id2ContentRef.current), id);
       pcRef.current = pc;
     });
     socket.on('room-full', () => {
@@ -155,11 +174,17 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
 
     socket.on('ready', () => {
       const pc = createPeer();
-      localStreamRef.current
-        ?.getTracks()
-        .forEach((track) => pc.addTrack(track, localStreamRef.current!));
+      addTracksToPC(pc);
 
+      socket.emit('id2Content', Array.from(id2ContentRef.current), id);
       pcRef.current = pc;
+    });
+
+    socket.on('id2Content', (data: Array<[string, string]>) => {
+      const map = new Map(data);
+      map.forEach((value, key) => {
+        id2ContentRef.current.set(key, value);
+      });
     });
 
     socket.on('message', handlePeerMessage);
@@ -184,7 +209,7 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
       socketRef.current = null;
       pcRef.current = null;
     };
-  }, [id, router, createPeer, getUserMedia, handlePeerMessage]);
+  }, [id, router, createPeer, getUserMedia, handlePeerMessage, addTracksToPC]);
 
   const toggleMediaStream = useCallback((type: string, state: boolean) => {
     localStreamRef.current?.getTracks().forEach((track) => {
@@ -205,20 +230,21 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
   }, [toggleMediaStream, camera]);
 
   const handleScreenShare = useCallback(async () => {
-    const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true });
-    stream.getTracks().forEach(track => pcRef.current?.addTrack(track, stream))
+    const stream = await navigator.mediaDevices.getDisplayMedia();
+    id2ContentRef.current.set(stream.id, 'screen');
+    socketRef.current?.emit('id2Content', Array.from(id2ContentRef.current), id);
 
+    stream.getTracks().forEach((track) => pcRef.current?.addTrack(track, stream));
     if (screenVideoRef.current) screenVideoRef.current.srcObject = stream;
-    
-  }, []);
+  }, [id]);
 
   return (
     <main className="flex flex-col mt-5 gap-3 m-2">
       <h1 className="text-xl font-bold text-center">
         Share the <span className="text-blue-500">link</span> with your friend to start the call
       </h1>
-      <section className="flex gap-5 grow">
-        <div className="flex flex-col gap-5">
+      <section className="grid grid-cols-10 gap-4 w-full">
+        <div className="flex flex-col justify-center gap-2 col-span-2">
           <video
             autoPlay
             ref={localVideoRef}
@@ -233,7 +259,7 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
             width="300"
             className="rounded-lg border"></video>
         </div>
-        <video ref={screenVideoRef}></video>
+        <video ref={screenVideoRef} autoPlay className="col-span-8" controls></video>
       </section>
       <div className="flex gap-2 mx-auto">
         <Button variant="outline" onClick={toggleMic}>
