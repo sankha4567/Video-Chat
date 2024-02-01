@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Socket, io } from 'socket.io-client';
 import { Button } from '@/components/ui/button';
 import { Mic, MicOff, Camera, CameraOff, ScreenShare } from 'lucide-react';
+import useSocket from '@/hooks/useSocket';
 
 type pageProps = {
   params: {
@@ -18,6 +19,8 @@ type Message = {
 };
 
 const Page: FC<pageProps> = ({ params: { id } }) => {
+  useSocket();
+
   const router = useRouter();
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -151,12 +154,13 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
   }, []);
 
   useEffect(() => {
-    const socket = io('http://localhost:8080');
+    const socket = io(":8080" ,{ path: '/api/socket', addTrailingSlash: false });
     socket.emit('room-join', id);
 
     socket.on('room-created', async () => {
       await getUserMedia();
     });
+
     socket.on('room-joined', async () => {
       politeRef.current = true;
 
@@ -168,6 +172,7 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
       socket.emit('id2Content', Array.from(id2ContentRef.current), id);
       pcRef.current = pc;
     });
+
     socket.on('room-full', () => {
       router.push('/');
     });
