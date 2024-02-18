@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Socket, io } from 'socket.io-client';
 import { Button } from '@/components/ui/button';
 import { Mic, MicOff, Camera, CameraOff, ScreenShare } from 'lucide-react';
-import useSocket from '@/hooks/useSocket';
 
 type pageProps = {
   params: {
@@ -19,8 +18,6 @@ type Message = {
 };
 
 const Page: FC<pageProps> = ({ params: { id } }) => {
-  useSocket();
-
   const router = useRouter();
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -154,7 +151,8 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
   }, []);
 
   useEffect(() => {
-    const socket = io(":8080" ,{ path: '/api/socket', addTrailingSlash: false });
+    const socket = io('https://streammate-signalling-server.onrender.com');
+    console.log('socket', socket);
     socket.emit('room-join', id);
 
     socket.on('room-created', async () => {
@@ -236,10 +234,12 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
 
   const handleScreenShare = useCallback(async () => {
     const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true });
+    
     id2ContentRef.current.set(stream.id, 'screen');
     socketRef.current?.emit('id2Content', Array.from(id2ContentRef.current), id);
 
     stream.getTracks().forEach((track) => pcRef.current?.addTrack(track, stream));
+    
     if (screenVideoRef.current) {
       screenVideoRef.current.srcObject = stream;
       screenVideoRef.current.muted = true;
