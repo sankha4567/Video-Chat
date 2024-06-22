@@ -30,6 +30,7 @@ io.on('connection', (socket) => {
       socket.emit('room-joined');
     } else {
       socket.emit('room-full');
+      return;
     }
 
     if (!userToRoomMap.has(socket.id)) {

@@ -38,7 +38,24 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
 
   const config: RTCConfiguration = useMemo(() => {
     return {
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      iceServers: [
+        {
+          urls: ['stun:fr-turn3.xirsys.com', 'stun:stun1.l.google.com:19302']
+        },
+        {
+          username:
+            'mypv_nBgtsi595DUOKcQBvSThglQ0tIZXK1PTWosWAYSBZRv8fbVPJtCCMCEBWdIAAAAAGZ3Fz5zZW5ibw==',
+          credential: 'e38da9f4-30c4-11ef-b935-0242ac120004',
+          urls: [
+            'turn:fr-turn3.xirsys.com:80?transport=udp',
+            'turn:fr-turn3.xirsys.com:3478?transport=udp',
+            'turn:fr-turn3.xirsys.com:80?transport=tcp',
+            'turn:fr-turn3.xirsys.com:3478?transport=tcp',
+            'turns:fr-turn3.xirsys.com:443?transport=tcp',
+            'turns:fr-turn3.xirsys.com:5349?transport=tcp'
+          ]
+        }
+      ]
     };
   }, []);
 
@@ -47,15 +64,9 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
       makingOfferRef.current = true;
       await pcRef.current?.setLocalDescription();
 
-      const msids = pcRef.current?.localDescription?.sdp
-        .split('\n')
-        .map((l) => l.trim())
-        .filter((l) => l.startsWith('a=msid:'));
-      console.log(msids);
-
       socketRef.current?.emit('message', { description: pcRef.current?.localDescription }, id);
     } catch (e) {
-      // toast notification ?
+      console.log(e);
     } finally {
       makingOfferRef.current = false;
     }
@@ -223,7 +234,7 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
   }, []);
 
   const toggleMic = useCallback(() => {
-    toggleMediaStream('mic', mic);
+    toggleMediaStream('audio', mic);
     setMic((mic) => !mic);
   }, [toggleMediaStream, mic]);
 
@@ -234,12 +245,12 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
 
   const handleScreenShare = useCallback(async () => {
     const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true });
-    
+
     id2ContentRef.current.set(stream.id, 'screen');
     socketRef.current?.emit('id2Content', Array.from(id2ContentRef.current), id);
 
     stream.getTracks().forEach((track) => pcRef.current?.addTrack(track, stream));
-    
+
     if (screenVideoRef.current) {
       screenVideoRef.current.srcObject = stream;
       screenVideoRef.current.muted = true;
