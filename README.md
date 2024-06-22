@@ -51,9 +51,10 @@ Make sure you have the following installed on your machine:
 
 2. **Install dependencies**:
     ```bash
+    cd web
     npm install
-    # or
-    yarn install
+    cd ../server
+    npm install
     ```
 
 ### Running the Application
@@ -61,16 +62,13 @@ Make sure you have the following installed on your machine:
 1. **Start the Signaling Server**:
     ```bash
     cd server
-    node index.js
+    npm run dev
     ```
 
 2. **Start the Next.js Application**:
     ```bash
-    cd ..
-    cn web 
+    cd ../web
     npm run dev
-    # or
-    pnpm  dev
     ```
 
 3. **Open your browser** and navigate to `http://localhost:3000`.
