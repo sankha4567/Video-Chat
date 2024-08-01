@@ -102,18 +102,21 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
   }, [config, handleNegotiationNeeded, handleTrack, handleICECandidate]);
 
   const getUserMedia = useCallback(async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      id2ContentRef.current.set(stream.id, 'webcam');
 
-    id2ContentRef.current.set(stream.id, 'webcam');
+      stream.getTracks().forEach((track) => {
+        if (track.kind === 'video') {
+          track.enabled = false;
+        }
+      });
 
-    stream.getTracks().forEach((track) => {
-      if (track.kind === 'video') {
-        track.enabled = false;
-      }
-    });
-
-    if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-    localStreamRef.current = stream;
+      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+      localStreamRef.current = stream;
+    } catch (err) {
+      console.log(err);
+    }
   }, []);
 
   const handlePeerMessage = useCallback(
