@@ -1,23 +1,43 @@
 'use client';
 
-import { FC, useEffect, useRef, useCallback, useState, useMemo } from 'react';
+import { FC, useEffect, useRef, useCallback, useState, useMemo, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { Socket, io } from 'socket.io-client';
 import { Button } from '@/components/ui/button';
 import { Mic, MicOff, Camera, CameraOff, ScreenShare } from 'lucide-react';
+import { toast } from 'sonner';
 
-type pageProps = {
-  params: {
-    id: string;
-  };
-};
 
 type Message = {
   description: RTCSessionDescription;
   candidate: RTCIceCandidate;
 };
 
-const Page: FC<pageProps> = ({ params: { id } }) => {
+
+function handleGetUserMediaError(error: Error) {
+  switch(error.name) {
+    case 'NotAllowedError':
+      toast.error('Permission denied: Please allow access to camera/microphone.');
+      break;
+    case 'NotFoundError':
+      toast.error('No camera/microphone found on this device.');
+      break;
+    case 'NotReadableError':
+      toast.error('Could not access your media devices. They may be in use by another application.');
+      break;
+    case 'OverconstrainedError':
+      toast.error(`Constraints cannot be satisfied by available devices.`);
+      break;
+    case 'AbortError':
+      toast.error('Media capture was aborted.');
+      break;
+    default:
+      toast.error('An unknown error occurred while trying to access media devices.');
+  }
+}
+
+const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
+  const { id } = use(params);
   const router = useRouter();
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -34,7 +54,7 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
   const politeRef = useRef<boolean>(false);
 
   const [mic, setMic] = useState<boolean>(true);
-  const [camera, setCamera] = useState<boolean>(false);
+  const [camera, setCamera] = useState<boolean>(true);
 
   const config: RTCConfiguration = useMemo(() => {
     return {
@@ -106,16 +126,10 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       id2ContentRef.current.set(stream.id, 'webcam');
 
-      stream.getTracks().forEach((track) => {
-        if (track.kind === 'video') {
-          track.enabled = false;
-        }
-      });
-
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       localStreamRef.current = stream;
-    } catch (err) {
-      console.log(err);
+    } catch (error) {
+      handleGetUserMediaError(error as Error);
     }
   }, []);
 
@@ -132,7 +146,7 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
             return;
           }
 
-          pcRef.current?.setRemoteDescription(description);
+          await pcRef.current?.setRemoteDescription(description);
 
           if (description.type === 'offer') {
             await pcRef.current?.setLocalDescription();
@@ -247,7 +261,19 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
   }, [toggleMediaStream, camera]);
 
   const handleScreenShare = useCallback(async () => {
-    const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true });
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({ audio: true });
+    } catch (error) {
+      switch((error as Error).name) {
+        case 'NotAllowedError':
+          toast.error('Permission denied: Please allow access to screen sharing.');
+          break;
+        case 'NotFoundError':
+          toast.error('No screen found on this device.');
+      }
+      return;
+    }
 
     id2ContentRef.current.set(stream.id, 'screen');
     socketRef.current?.emit('id2Content', Array.from(id2ContentRef.current), id);
@@ -260,39 +286,95 @@ const Page: FC<pageProps> = ({ params: { id } }) => {
     }
   }, [id]);
 
+
   return (
-    <main className="flex flex-col mt-5 gap-3 m-2">
-      <h1 className="text-xl font-bold text-center">
-        Share the <span className="text-blue-500">link</span> with your friend to start the call
-      </h1>
-      <section className="grid grid-cols-10 gap-4 w-full">
-        <div className="flex flex-col justify-center gap-2 col-span-2">
-          <video
-            autoPlay
-            ref={localVideoRef}
-            height="225"
-            width="300"
-            muted
-            className="rounded-lg border"></video>
-          <video
-            autoPlay
-            ref={remoteVideoRef}
-            height="225"
-            width="300"
-            className="rounded-lg border"></video>
+    <main className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-6">
+        {/* Header Section */}
+        <div className="text-center mb-8">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
+            Video Conference Room
+          </h1>
+          <p className="text-muted-foreground">
+            Share the <span className="text-red-500 font-semibold">room link</span> with your friend to start the call
+          </p>
         </div>
-        <video ref={screenVideoRef} autoPlay className="col-span-8" controls></video>
-      </section>
-      <div className="flex gap-2 mx-auto">
-        <Button variant="outline" onClick={toggleMic}>
-          {mic ? <Mic /> : <MicOff />}
-        </Button>
-        <Button variant="outline" onClick={toggleCam}>
-          {camera ? <Camera /> : <CameraOff />}
-        </Button>
-        <Button variant="outline" onClick={handleScreenShare}>
-          <ScreenShare />
-        </Button>
+
+        {/* Video Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
+          {/* Side Panel - Local & Remote Videos */}
+          <div className="lg:col-span-3 space-y-4">
+            {/* Local Video */}
+            <div className="relative group">
+              <div className="absolute top-2 left-2 z-10 bg-black/50 text-white px-2 py-1 rounded text-xs font-medium">
+                You
+              </div>
+              <video
+                autoPlay
+                ref={localVideoRef}
+                muted
+                className="w-full aspect-video bg-muted rounded-xl border-2 border-border shadow-lg object-cover"
+              />
+            </div>
+
+            {/* Remote Video */}
+            <div className="relative">
+              <div className="absolute top-2 left-2 z-10 bg-black/50 text-white px-2 py-1 rounded text-xs font-medium">
+                Friend
+              </div>
+              <video
+                autoPlay
+                ref={remoteVideoRef}
+                className="w-full aspect-video bg-muted rounded-xl border-2 border-border shadow-lg object-cover"
+              />
+            </div>
+          </div>
+
+          {/* Main Screen Share Area */}
+          <div className="lg:col-span-9">
+            <div className="relative bg-muted rounded-xl border-2 border-border shadow-lg overflow-hidden">
+              <video 
+                ref={screenVideoRef} 
+                autoPlay 
+                className="w-full h-full min-h-[400px] lg:min-h-[500px] object-contain"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Control Panel */}
+        <div className="flex justify-center">
+          <div className="bg-card rounded-2xl shadow-xl border border-border p-4">
+            <div className="flex items-center gap-3">
+              <Button 
+                variant={mic ? "default" : "destructive"} 
+                size="lg"
+                onClick={toggleMic}
+                className="rounded-xl h-12 w-12 p-0 transition-all hover:scale-105"
+              >
+                {mic ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+              </Button>
+              
+              <Button 
+                variant={camera ? "default" : "destructive"} 
+                size="lg"
+                onClick={toggleCam}
+                className="rounded-xl h-12 w-12 p-0 transition-all hover:scale-105"
+              >
+                {camera ? <Camera className="w-5 h-5" /> : <CameraOff className="w-5 h-5" />}
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                size="lg"
+                onClick={handleScreenShare}
+                className="rounded-xl h-12 w-12 p-0 transition-all hover:scale-105"
+              >
+                <ScreenShare className="w-5 h-5" />
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   );
