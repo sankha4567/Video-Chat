@@ -7,15 +7,13 @@ import { Button } from '@/components/ui/button';
 import { Mic, MicOff, Camera, CameraOff, ScreenShare } from 'lucide-react';
 import { toast } from 'sonner';
 
-
 type Message = {
   description: RTCSessionDescription;
   candidate: RTCIceCandidate;
 };
 
-
 function handleGetUserMediaError(error: Error) {
-  switch(error.name) {
+  switch (error.name) {
     case 'NotAllowedError':
       toast.error('Permission denied: Please allow access to camera/microphone.');
       break;
@@ -23,7 +21,9 @@ function handleGetUserMediaError(error: Error) {
       toast.error('No camera/microphone found on this device.');
       break;
     case 'NotReadableError':
-      toast.error('Could not access your media devices. They may be in use by another application.');
+      toast.error(
+        'Could not access your media devices. They may be in use by another application.'
+      );
       break;
     case 'OverconstrainedError':
       toast.error(`Constraints cannot be satisfied by available devices.`);
@@ -265,7 +265,7 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
     try {
       stream = await navigator.mediaDevices.getDisplayMedia({ audio: true });
     } catch (error) {
-      switch((error as Error).name) {
+      switch ((error as Error).name) {
         case 'NotAllowedError':
           toast.error('Permission denied: Please allow access to screen sharing.');
           break;
@@ -286,7 +286,6 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
     }
   }, [id]);
 
-
   return (
     <main className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-6">
@@ -296,7 +295,8 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
             Video Conference Room
           </h1>
           <p className="text-muted-foreground">
-            Share the <span className="text-red-500 font-semibold">room link</span> with your friend to start the call
+            Share the <span className="text-red-500 font-semibold">room link</span> with your friend
+            to start the call
           </p>
         </div>
 
@@ -333,9 +333,9 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
           {/* Main Screen Share Area */}
           <div className="lg:col-span-9">
             <div className="relative bg-muted rounded-xl border-2 border-border shadow-lg overflow-hidden">
-              <video 
-                ref={screenVideoRef} 
-                autoPlay 
+              <video
+                ref={screenVideoRef}
+                autoPlay
                 className="w-full h-full min-h-[400px] lg:min-h-[500px] object-contain"
               />
             </div>
@@ -346,30 +346,27 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
         <div className="flex justify-center">
           <div className="bg-card rounded-2xl shadow-xl border border-border p-4">
             <div className="flex items-center gap-3">
-              <Button 
-                variant={mic ? "default" : "destructive"} 
+              <Button
+                variant={mic ? 'default' : 'destructive'}
                 size="lg"
                 onClick={toggleMic}
-                className="rounded-xl h-12 w-12 p-0 transition-all hover:scale-105"
-              >
+                className="rounded-xl h-12 w-12 p-0 transition-all hover:scale-105">
                 {mic ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
               </Button>
-              
-              <Button 
-                variant={camera ? "default" : "destructive"} 
+
+              <Button
+                variant={camera ? 'default' : 'destructive'}
                 size="lg"
                 onClick={toggleCam}
-                className="rounded-xl h-12 w-12 p-0 transition-all hover:scale-105"
-              >
+                className="rounded-xl h-12 w-12 p-0 transition-all hover:scale-105">
                 {camera ? <Camera className="w-5 h-5" /> : <CameraOff className="w-5 h-5" />}
               </Button>
-              
-              <Button 
-                variant="outline" 
+
+              <Button
+                variant="outline"
                 size="lg"
                 onClick={handleScreenShare}
-                className="rounded-xl h-12 w-12 p-0 transition-all hover:scale-105"
-              >
+                className="rounded-xl h-12 w-12 p-0 transition-all hover:scale-105">
                 <ScreenShare className="w-5 h-5" />
               </Button>
             </div>

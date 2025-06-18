@@ -46,7 +46,6 @@ io.on('connection', (socket) => {
     } else {
       userToRoomMap.get(socket.id)?.add(roomID);
     }
-    
   });
 
   socket.on('ready', (roomID) => {

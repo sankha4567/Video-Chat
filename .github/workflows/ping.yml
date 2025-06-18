@@ -2,7 +2,7 @@ name: Keep Render Service Awake
 
 on:
   schedule:
-    - cron: '*/14 * * * *' 
+    - cron: '*/14 * * * *'
 
 jobs:
   ping:
