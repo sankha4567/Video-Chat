@@ -1,18 +1,6 @@
 # StreamMate
 
-This project enables you to initiate a video chat with a friend in one click, including screen sharing capabilities. Built with cutting-edge technologies, StreamMate leverages WebRTC for real-time communication, Socket.IO for efficient signaling, and a modern frontend stack for a seamless user experience.
-
-## Table of Contents
-
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Running the Application](#running-the-application)
-- [Usage](#usage)
-- [Contributing](#contributing)
-- [License](#license)
+This project enables you to initiate a video chat with a friend in one click, including screen sharing capabilities. Built with  WebRTC for real-time communication, socketio server for efficient signaling, and nextjs for the frontend.
 
 ## Features
 
@@ -24,13 +12,13 @@ This project enables you to initiate a video chat with a friend in one click, in
 ## Tech Stack
 
 - **Frontend**:
-  - [Next.js](https://nextjs.org/)
-  - [Typescript](https://www.typescriptlang.org/)
-  - [ShadcnUi](https://shadcn-ui.com/)
-  - [TailwindCSS](https://tailwindcss.com/)
+  - Next.js
+  - Typescript
+  - ShadcnUi
+  - TailwindCSS
 - **Backend**:
-  - [Node.js](https://nodejs.org/)
-  - [Socket.IO](https://socket.io/)
+  - Node.js
+  - Socket.IO
 
 ## Getting Started
 
@@ -38,8 +26,8 @@ This project enables you to initiate a video chat with a friend in one click, in
 
 Make sure you have the following installed on your machine:
 
-- [Node.js](https://nodejs.org/) (v14 or higher)
-- [npm](https://www.npmjs.com/) or [pnpm](https://pnpm.io/installation)
+- Node.js (v14 or higher)
+- pnpm
 
 ### Installation
 
@@ -62,31 +50,22 @@ Make sure you have the following installed on your machine:
 1. **Start the Signaling Server**:
     ```bash
     cd server
-    npm run dev
+    pnpm run dev
     ```
 
 2. **Start the Next.js Application**:
+    In a new terminal window, run the following command:
     ```bash
-    cd ../web
-    npm run dev
+    cd /web
+    pnpm run dev
     ```
 
 3. **Open your browser** and navigate to `http://localhost:3000`.
 
 
-## Usage
-
-1. **Open the Application**: Visit the application URL in your browser.
-2. **Start a Video Chat**: Click the button to start a video chat. Share the generated link with your friend.
-3. **Screen Sharing**: Use the screen sharing option during the call to share your screen.
-
-### Note
-
-The signaling server is deployed on a free instance on [Render](https://render.com/). This instance will spin down with inactivity, which can delay requests by up to 50 seconds when it starts up again.
-
 ## Contributing
 
-We welcome contributions from the community! To contribute:
+To contribute:
 
 1. Fork the repository.
 2. Create a new branch (`git checkout -b feature/your-feature`).
@@ -94,8 +73,5 @@ We welcome contributions from the community! To contribute:
 4. Push to the branch (`git push origin feature/your-feature`).
 5. Open a pull request.
 
-## License
-
-This project is licensed under the MIT License.
 
 ---

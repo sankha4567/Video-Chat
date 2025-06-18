@@ -14,6 +14,14 @@ const port = process.env.PORT || 8080;
 
 app.use(express.json());
 
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
 const userToRoomMap = new Map<string, Set<string>>();
 
 io.on('connection', (socket) => {
