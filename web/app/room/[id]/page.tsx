@@ -4,7 +4,7 @@ import { FC, useEffect, useRef, useCallback, useState, useMemo, use } from 'reac
 import { useRouter } from 'next/navigation';
 import { Socket, io } from 'socket.io-client';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Camera, CameraOff, ScreenShare } from 'lucide-react';
+import { Mic, MicOff, Camera, CameraOff, ScreenShare, LogOut, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Message = {
@@ -83,7 +83,6 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
     try {
       makingOfferRef.current = true;
       await pcRef.current?.setLocalDescription();
-
       socketRef.current?.emit('message', { description: pcRef.current?.localDescription }, id);
     } catch (e) {
       console.log(e);
@@ -125,7 +124,6 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       id2ContentRef.current.set(stream.id, 'webcam');
-
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       localStreamRef.current = stream;
     } catch (error) {
@@ -180,7 +178,6 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
 
   useEffect(() => {
     const socket = io('https://streammate-signalling-server.onrender.com');
-    console.log('socket', socket);
     socket.emit('room-join', id);
 
     socket.on('room-created', async () => {
@@ -189,7 +186,6 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
 
     socket.on('room-joined', async () => {
       politeRef.current = true;
-
       const pc = createPeer();
       await getUserMedia();
       addTracksToPC(pc);
@@ -206,7 +202,6 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
     socket.on('ready', () => {
       const pc = createPeer();
       addTracksToPC(pc);
-
       socket.emit('id2Content', Array.from(id2ContentRef.current), id);
       pcRef.current = pc;
     });
@@ -222,11 +217,9 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
 
     socket.on('user-disconnected', () => {
       politeRef.current = false;
-
       if (remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = null;
       }
-
       if (pcRef.current) {
         pcRef.current.close();
         pcRef.current = null;
@@ -277,7 +270,6 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
 
     id2ContentRef.current.set(stream.id, 'screen');
     socketRef.current?.emit('id2Content', Array.from(id2ContentRef.current), id);
-
     stream.getTracks().forEach((track) => pcRef.current?.addTrack(track, stream));
 
     if (screenVideoRef.current) {
@@ -285,6 +277,19 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
       screenVideoRef.current.muted = true;
     }
   }, [id]);
+
+  const handleLeave = useCallback(() => {
+    // Stop local tracks
+    localStreamRef.current?.getTracks().forEach((track) => track.stop());
+    // Close peer connection
+    pcRef.current?.close();
+    pcRef.current = null;
+    // Disconnect socket
+    socketRef.current?.disconnect();
+    socketRef.current = null;
+    // Redirect
+    router.push('/');
+  }, [router]);
 
   return (
     <main className="min-h-screen bg-background">
@@ -294,15 +299,25 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
           <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
             Video Conference Room
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground mb-4">
             Share the <span className="text-red-500 font-semibold">room link</span> with your friend
             to start the call
           </p>
+          <Button
+            variant="outline"
+            onClick={() => {
+              const roomLink = `${window.location.origin}/room/${id}`;
+              navigator.clipboard.writeText(roomLink);
+              toast.success('Room link copied to clipboard!');
+            }}
+            className="rounded-xl shadow-md hover:scale-105 transition-transform flex items-center gap-2"
+          >
+            <Copy className="w-4 h-4" /> Copy Room Link
+          </Button>
         </div>
 
         {/* Video Section */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
-          {/* Side Panel - Local & Remote Videos */}
           <div className="lg:col-span-3 space-y-4">
             {/* Local Video */}
             <div className="relative group">
@@ -330,7 +345,7 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
             </div>
           </div>
 
-          {/* Main Screen Share Area */}
+          {/* Main Screen Share */}
           <div className="lg:col-span-9">
             <div className="relative bg-muted rounded-xl border-2 border-border shadow-lg overflow-hidden">
               <video
@@ -350,7 +365,8 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
                 variant={mic ? 'default' : 'destructive'}
                 size="lg"
                 onClick={toggleMic}
-                className="rounded-xl h-12 w-12 p-0 transition-all hover:scale-105">
+                className="rounded-xl h-12 w-12 p-0 transition-all hover:scale-105"
+              >
                 {mic ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
               </Button>
 
@@ -358,7 +374,8 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
                 variant={camera ? 'default' : 'destructive'}
                 size="lg"
                 onClick={toggleCam}
-                className="rounded-xl h-12 w-12 p-0 transition-all hover:scale-105">
+                className="rounded-xl h-12 w-12 p-0 transition-all hover:scale-105"
+              >
                 {camera ? <Camera className="w-5 h-5" /> : <CameraOff className="w-5 h-5" />}
               </Button>
 
@@ -366,8 +383,18 @@ const Page: FC<{ params: Promise<{ id: string }> }> = ({ params }) => {
                 variant="outline"
                 size="lg"
                 onClick={handleScreenShare}
-                className="rounded-xl h-12 w-12 p-0 transition-all hover:scale-105">
+                className="rounded-xl h-12 w-12 p-0 transition-all hover:scale-105"
+              >
                 <ScreenShare className="w-5 h-5" />
+              </Button>
+
+              <Button
+                variant="destructive"
+                size="lg"
+                onClick={handleLeave}
+                className="rounded-xl h-12 w-12 p-0 transition-all hover:scale-105"
+              >
+                <LogOut className="w-5 h-5" />
               </Button>
             </div>
           </div>

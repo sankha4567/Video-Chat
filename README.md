@@ -33,7 +33,7 @@ Make sure you have the following installed on your machine:
 
 1. **Clone the repository**:
     ```bash
-    git clone https://github.com/senbo1/StreamMate.git
+    git clone https://github.com/sankha4567/Video-Chat.git
     cd StreamMate
     ```
 

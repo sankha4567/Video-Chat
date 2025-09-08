@@ -6,7 +6,7 @@ export default function Home() {
       <section className="flex flex-col gap-8">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold">
-            Start a <span className="text-green-500">Stream!</span>
+            Start a <span className="text-green-500">Video Chat!</span>
           </h1>
           <p className="text-sm dark:text-gray-400 text-gray-500">
             Create a room by clicking the button below

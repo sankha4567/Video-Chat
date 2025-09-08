@@ -7,7 +7,7 @@ import { Toaster } from '@/components/ui/sonner';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'WebRTC-video',
+  title: 'Video Chat',
   description: 'Video chat app created with webRTC and nextjs'
 };
 
