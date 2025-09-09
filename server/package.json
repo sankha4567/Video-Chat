@@ -1,14 +1,14 @@
 {
   "name": "server",
-  "version": "1.0.0",
-  "description": "",
+  "version": "0.2.0",
+  "description": "Web RTC",
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/index.ts",
-    "build": "tsc",
+    "build": "npm i && tsc ",
     "start": "node dist/index.js"
   },
-  "author": "senbo1",
+  "author": "sankha",
   "license": "MIT",
   "dependencies": {
     "express": "^4.21.2",
@@ -16,9 +16,10 @@
   },
   "devDependencies": {
     "@types/express": "^4.17.23",
-    "@types/node": "^20.19.1",
+    "@types/node": "^20.19.11",
+    "@types/socket.io": "^3.0.1",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.9.2"
   }
 }
